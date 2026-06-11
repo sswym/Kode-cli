@@ -1,15 +1,18 @@
-import { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { Message } from '@query'
 import { useMemo } from 'react'
 import { Tool } from '@tool'
 import { GlobTool } from '@tools/GlobTool/GlobTool'
 import { GrepTool } from '@tools/search/GrepTool/GrepTool'
+import {
+  isToolUseLikeBlockParam,
+  type ToolUseLikeBlockParam,
+} from '@utils/ai/anthropic'
 
 function getToolUseFromMessages(
   toolUseID: string,
   messages: Message[],
-): ToolUseBlockParam | null {
-  let toolUse: ToolUseBlockParam | null = null
+): ToolUseLikeBlockParam | null {
+  let toolUse: ToolUseLikeBlockParam | null = null
   for (const message of messages) {
     if (
       message.type !== 'assistant' ||
@@ -18,12 +21,7 @@ function getToolUseFromMessages(
       continue
     }
     for (const content of message.message.content) {
-      if (
-        (content.type === 'tool_use' ||
-          content.type === 'server_tool_use' ||
-          content.type === 'mcp_tool_use') &&
-        content.id === toolUseID
-      ) {
+      if (isToolUseLikeBlockParam(content) && content.id === toolUseID) {
         toolUse = content
       }
     }
@@ -35,13 +33,11 @@ export function useGetToolFromMessages(
   toolUseID: string,
   tools: Tool[],
   messages: Message[],
-) {
+): { tool: Tool; toolUse: ToolUseLikeBlockParam } | null {
   return useMemo(() => {
     const toolUse = getToolUseFromMessages(toolUseID, messages)
     if (!toolUse) {
-      throw new ReferenceError(
-        `Tool use not found for tool_use_id ${toolUseID}`,
-      )
+      return null
     }
     const tool = [...tools, GlobTool, GrepTool].find(
       _ => _.name === toolUse.name,
@@ -49,7 +45,7 @@ export function useGetToolFromMessages(
     if (tool === GlobTool || tool === GrepTool) {
     }
     if (!tool) {
-      throw new ReferenceError(`Tool not found for ${toolUse.name}`)
+      return null
     }
     return { tool, toolUse }
   }, [toolUseID, messages, tools])
